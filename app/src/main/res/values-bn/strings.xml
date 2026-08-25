@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">বই খাতা</string>
+    <string name="dashboard">ড্যাশ</string>
+    <string name="bill">বিল</string>
+    <string name="khata">খাতা</string>
+    <string name="stock">স্টক</string>
+    <string name="accounts">হিসাব</string>
+    <string name="more">আরও</string>
+    
+    <string name="today_sales">আজ বিক্রি</string>
+    <string name="today_collection">আজ আদায়</string>
+    <string name="today_profit">আজ লাভ(আনুমানিক)</string>
+    
+    <string name="new_bill">[+ নতুন বিল]</string>
+    <string name="collect_dues">[বাকি আদায়]</string>
+    <string name="add_expense">[+ খরচ]</string>
+    <string name="reports">[রিপোর্ট]</string>
+    
+    <string name="collect_today_title">আজ কার কাছে আদায় করবেন?</string>
+    <string name="see_all">[সব দেখুন]</string>
+    <string name="collect_button">[আদায়]</string>
+    
+    <string name="low_stock">কম স্টক: %1$dটি</string>
+    <string name="order_now">[অর্ডার করুন →]</string>
+    
+    <string name="subscription_alert">⚠ সাবস্ক্রিপশন %1$d দিন বাকি —</string>
+    <string name="pay_now">[এখনই পরিশোধ]</string>
+    
+    <string name="sync_status">🔄 সিঙ্ক ✓</string>
+    <string name="backup_status">☁️ ব্যাকআপ ✓</string>
+    
+    <string name="coming_next_phase">পরবর্তী ফেজে আসছে</string>
+    <string name="days_format">(%1$d দিন)</string>
+    <string name="currency_symbol">৳</string>
+</resources>

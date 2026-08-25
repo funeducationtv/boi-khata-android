@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Boi Khata</string>
+    <string name="dashboard">Dash</string>
+    <string name="bill">Bill</string>
+    <string name="khata">Khata</string>
+    <string name="stock">Stock</string>
+    <string name="accounts">Accounts</string>
+    <string name="more">More</string>
+    
+    <string name="today_sales">Today Sales</string>
+    <string name="today_collection">Today Collection</string>
+    <string name="today_profit">Today Profit(Est)</string>
+    
+    <string name="new_bill">[+ New Bill]</string>
+    <string name="collect_dues">[Collect Dues]</string>
+    <string name="add_expense">[+ Expense]</string>
+    <string name="reports">[Reports]</string>
+    
+    <string name="collect_today_title">Who to collect from today?</string>
+    <string name="see_all">[See All]</string>
+    <string name="collect_button">[Collect]</string>
+    
+    <string name="low_stock">Low Stock: %1$d</string>
+    <string name="order_now">[Order Now →]</string>
+    
+    <string name="subscription_alert">⚠ Subscription %1$d days left —</string>
+    <string name="pay_now">[Pay Now]</string>
+    
+    <string name="sync_status">🔄 Sync ✓</string>
+    <string name="backup_status">☁️ Backup ✓</string>
+    <string name="coming_next_phase">Coming Next Phase</string>
+    
+    <string name="days_format">(%1$d days)</string>
+    <string name="currency_symbol">৳</string>
+</resources>

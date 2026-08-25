@@ -1,0 +1,2 @@
+#!/bin/bash
+sed -i 's/entities = \[Tenant::class, User::class, AuditLog::class, Book::class, StockLedgerEntry::class, Bill::class, BillLine::class, KhataEntry::class\]/entities = \[Tenant::class, User::class, AuditLog::class, Book::class, StockLedgerEntry::class, Bill::class, BillLine::class, KhataEntry::class, KhataCustomer::class, ExpenseCategory::class, Expense::class, CashbookEntry::class, OwnerDrawing::class, MasterCatalogBook::class\]/g' app/src/main/java/com/boikhata/data/local/AppDatabase.kt
