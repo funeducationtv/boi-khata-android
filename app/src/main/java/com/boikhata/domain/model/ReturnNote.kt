@@ -43,6 +43,11 @@ data class ReturnNote(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
+data class ReturnNoteWithLines(
+    val returnNote: ReturnNote,
+    val lines: List<ReturnNoteLine>
+)
+
 /**
  * Reasons for returning books.
  */
