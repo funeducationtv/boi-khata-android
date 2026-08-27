@@ -30,10 +30,18 @@ interface KhataDao {
     @Query("SELECT * FROM khata_entries WHERE tenantId = :tenantId")
     suspend fun getAllKhataEntriesDirect(tenantId: String): List<KhataEntry>
 
+    @Query("SELECT * FROM khata_entries WHERE tenantId = :tenantId")
+    fun getAllKhataEntries(tenantId: String): Flow<List<KhataEntry>>
+
     @Query("""
         SELECT c.*, 
-        (SUM(CASE WHEN e.type = 'CREDIT' THEN e.amount ELSE 0 END) - 
-         SUM(CASE WHEN e.type = 'PAYMENT' THEN e.amount ELSE 0 END)) as balance,
+        SUM(
+            CASE WHEN e.type = 'CREDIT' THEN e.amount
+                 WHEN e.type = 'OPENING' THEN e.amount
+                 WHEN e.type = 'ADJUSTMENT' THEN e.amount
+                 WHEN e.type = 'PAYMENT' THEN -e.amount
+                 ELSE 0 END
+        ) as balance,
         0 as daysOverdue
         FROM khata_customers c 
         LEFT JOIN khata_entries e ON c.id = e.customerId 
@@ -52,6 +60,9 @@ interface AccountingDao {
     suspend fun insertExpenseCategory(category: ExpenseCategory)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExpenseCategories(categories: List<ExpenseCategory>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: Expense)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -66,12 +77,18 @@ interface AccountingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOwnerDrawing(drawing: OwnerDrawing)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOwnerDrawings(drawings: List<OwnerDrawing>)
+
     @Transaction
     @Query("SELECT * FROM expenses WHERE tenantId = :tenantId ORDER BY expenseDate DESC")
     fun getExpenses(tenantId: String): Flow<List<ExpenseWithCategory>>
 
     @Query("SELECT * FROM expenses WHERE tenantId = :tenantId")
     suspend fun getAllExpensesDirect(tenantId: String): List<Expense>
+
+    @Query("SELECT * FROM expense_categories WHERE tenantId = :tenantId")
+    suspend fun getAllExpenseCategoriesDirect(tenantId: String): List<ExpenseCategory>
 
     @Query("SELECT * FROM expense_categories WHERE tenantId = :tenantId AND isActive = 1")
     fun getExpenseCategories(tenantId: String): Flow<List<ExpenseCategory>>
@@ -84,6 +101,9 @@ interface AccountingDao {
 
     @Query("SELECT * FROM owner_drawings WHERE tenantId = :tenantId ORDER BY drawingDate DESC")
     fun getOwnerDrawings(tenantId: String): Flow<List<OwnerDrawing>>
+
+    @Query("SELECT * FROM owner_drawings WHERE tenantId = :tenantId")
+    suspend fun getAllOwnerDrawingsDirect(tenantId: String): List<OwnerDrawing>
     
     @Query("SELECT SUM(amount) FROM expenses WHERE tenantId = :tenantId AND expenseDate >= :start AND expenseDate <= :end")
     fun getTotalExpenses(tenantId: String, start: Long, end: Long): Flow<Double?>

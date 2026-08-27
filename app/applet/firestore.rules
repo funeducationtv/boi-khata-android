@@ -1,3 +1,8 @@
+// =============================================================================
+// REFERENCE COPY ONLY — NOT AUTHORITATIVE.
+// The Firebase console is the source of truth for published rules. This local
+// copy is kept in sync as a reference for the applet runtime and developers.
+// =============================================================================
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -124,16 +129,20 @@ service cloud.firestore {
     // =========================================================================
 
     match /khata_customers/{customerId} {
-      // OWNER and MANAGER can read and manage khata customers; SALES cannot read
-      allow read: if isSameTenantResource() && (isOwner() || isManager());
-      allow write: if isSameTenantIncoming() && (isOwner() || isManager());
+      // OWNER, MANAGER, and ACCOUNTANT can read khata customers; SALES cannot read
+      allow read: if isSameTenantResource() && (isOwner() || isManager() || isAccountant());
+      // Khata customer CREATE is OWNER-ONLY (LOCKED design); no client update/delete
+      allow create: if isSameTenantIncoming() && isOwner();
+      allow update, delete: if false;
     }
 
     match /khata_entries/{entryId} {
-      // OWNER and MANAGER can view dues and credit histories; SALES has NO access
-      allow read: if isSameTenantResource() && (isOwner() || isManager());
-      // Append-only credit/payment entries can be created by OWNER or MANAGER
-      allow create: if isSameTenantIncoming() && (isOwner() || isManager());
+      // OWNER, MANAGER, and ACCOUNTANT can view dues; SALES has NO access
+      allow read: if isSameTenantResource() && (isOwner() || isManager() || isAccountant());
+      // Append-only: OWNER/MANAGER create credit entries; ACCOUNTANT may only record PAYMENT entries
+      allow create: if isSameTenantIncoming() && (
+        isOwner() || isManager() || (isAccountant() && request.resource.data.type == 'PAYMENT')
+      );
       // Financial ledger integrity: No client updates or deletes
       allow update, delete: if false;
     }
@@ -158,6 +167,26 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /expense_categories/{categoryId} {
+      // OWNER and ACCOUNTANT manage expense categories; MANAGER and SALES have NO access
+      allow read: if isSameTenantResource() && (isOwner() || isAccountant());
+      allow create: if isSameTenantIncoming() && (isOwner() || isAccountant());
+      allow update, delete: if isSameTenantResource() && (isOwner() || isAccountant());
+    }
+
+    match /owner_drawings/{drawingId} {
+      // Owner equity withdrawals are OWNER-only and immutable from the client
+      allow read: if isSameTenantResource() && isOwner();
+      allow create: if isSameTenantIncoming() && isOwner();
+      allow update, delete: if false;
+    }
+
+    // Global NCTB master catalog (no tenantId; shared reference data)
+    match /masterCatalog/{bookId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
     // =========================================================================
     // 7. SUBSCRIPTION, LICENSES & WALLET TRANSACTIONS
     // =========================================================================
@@ -171,7 +200,8 @@ service cloud.firestore {
     match /subscription_payments/{paymentId} {
       // OWNER can view their payment history and initiate new subscription payments
       allow read: if isSameTenantResource() && isOwner();
-      allow create: if isSameTenantIncoming() && isOwner();
+      // Client create allowed ONLY with status == 'PENDING' (manual bKash verification flow)
+      allow create: if isSameTenantIncoming() && isOwner() && request.resource.data.status == 'PENDING';
       allow update, delete: if false;
     }
 

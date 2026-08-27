@@ -12,9 +12,9 @@ import javax.inject.Inject
 class MasterCatalogRepositoryImpl @Inject constructor(
     private val masterDao: MasterCatalogDao,
     private val catalogDao: CatalogDao,
+    private val tenantIdProvider: TenantIdProvider,
     private val auditRepo: AuditRepository
 ) : MasterCatalogRepository {
-    private val tenantId = "t_1"
 
     override fun getAllMasterBooks(): Flow<List<MasterCatalogBook>> = masterDao.getAllMasterBooks()
 
@@ -53,7 +53,7 @@ class MasterCatalogRepositoryImpl @Inject constructor(
             val bookId = UUID.randomUUID().toString()
             val book = Book(
                 id = bookId,
-                tenantId = tenantId,
+                tenantId = tenantIdProvider.current(),
                 isbn = masterBook.isbn,
                 titleBn = masterBook.titleBn,
                 titleEn = masterBook.titleEn,
@@ -76,7 +76,7 @@ class MasterCatalogRepositoryImpl @Inject constructor(
             if (initialStock > 0) {
                 val stockEntry = StockLedgerEntry(
                     id = UUID.randomUUID().toString(),
-                    tenantId = tenantId,
+                    tenantId = tenantIdProvider.current(),
                     bookId = bookId,
                     changeQuantity = initialStock,
                     reason = StockChangeReason.PURCHASE,

@@ -2,9 +2,11 @@ package com.boikhata.data.repository
 
 import android.app.Activity
 import com.boikhata.data.local.CloudSyncDao
+import com.boikhata.data.repository.TenantIdProvider
 import com.boikhata.domain.model.CloudAuthResult
 import com.boikhata.domain.model.CloudAuthState
 import com.boikhata.domain.model.CloudSyncState
+import com.boikhata.domain.model.LicenseState
 import com.boikhata.domain.repository.FirebaseAuthRepository
 import com.boikhata.presentation.SessionManager
 import com.google.firebase.FirebaseException
@@ -173,6 +175,23 @@ class FirebaseAuthRepositoryImpl @Inject constructor(
         val isPending = tenantId.isNullOrBlank() || role.isNullOrBlank()
 
         val existingSync = cloudSyncDao.getSyncStateDirect()
+
+        // A4: one-time tenant rebind. On the FIRST successful cloud login ever
+        // (no cloud_sync_state row yet), move all local rows tagged with the Phase-1
+        // placeholder to the claims tenantId BEFORE the first backup. Must precede the
+        // saveSyncState insert so the rebind and the row creation are ordered correctly.
+        if (existingSync == null && !isPending && !tenantId.isNullOrBlank()) {
+            try {
+                cloudSyncDao.rebindTenantId(TenantIdProvider.DEFAULT_TENANT, tenantId)
+            } catch (e: Exception) {
+                // Rebind is best-effort containment; never fail login because of it.
+            }
+        }
+
+        // A2: never default a brand-new license to ACTIVE before the first real sync.
+        // Fall back to the locally seeded GRACE state (Phase-1 seed = GRACE + 14 days).
+        val now = System.currentTimeMillis()
+        val graceExpiry = now + (14L * 24 * 60 * 60 * 1000)
         val updatedState = CloudSyncState(
             id = "primary",
             tenantId = tenantId ?: existingSync?.tenantId ?: "",
@@ -182,9 +201,9 @@ class FirebaseAuthRepositoryImpl @Inject constructor(
             lastBackupAt = existingSync?.lastBackupAt,
             lastRestoreAt = existingSync?.lastRestoreAt,
             lastCatalogSyncAt = existingSync?.lastCatalogSyncAt,
-            licenseExpiresAt = existingSync?.licenseExpiresAt,
-            licenseState = existingSync?.licenseState ?: com.boikhata.domain.model.LicenseState.ACTIVE,
-            updatedAt = System.currentTimeMillis()
+            licenseExpiresAt = existingSync?.licenseExpiresAt ?: graceExpiry,
+            licenseState = existingSync?.licenseState ?: LicenseState.GRACE,
+            updatedAt = now
         )
         cloudSyncDao.saveSyncState(updatedState)
 

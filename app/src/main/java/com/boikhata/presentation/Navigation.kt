@@ -25,7 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.R
+import com.boikhata.R
 import com.boikhata.domain.model.Role
 import com.boikhata.domain.model.User
 import com.boikhata.presentation.auth.AuthViewModel
@@ -76,7 +76,7 @@ fun MainApp(sessionManager: SessionManager) {
     val allItems = listOf(
         BottomNavItem(R.string.dashboard, DashboardRoute, "🏠", listOf(Role.OWNER, Role.MANAGER, Role.SALES, Role.ACCOUNTANT)),
         BottomNavItem(R.string.bill, BillRoute, "🧾", listOf(Role.OWNER, Role.MANAGER, Role.SALES)),
-        BottomNavItem(R.string.khata, KhataRoute, "📔", listOf(Role.OWNER)),
+        BottomNavItem(R.string.khata, KhataRoute, "📔", listOf(Role.OWNER, Role.MANAGER, Role.ACCOUNTANT)),
         BottomNavItem(R.string.stock, StockRoute, "📦", listOf(Role.OWNER, Role.MANAGER, Role.SALES)),
         BottomNavItem(R.string.accounts, AccountsRoute, "📊", listOf(Role.OWNER, Role.ACCOUNTANT)),
         BottomNavItem(R.string.more, MoreRoute, "☰", listOf(Role.OWNER, Role.MANAGER, Role.ACCOUNTANT))

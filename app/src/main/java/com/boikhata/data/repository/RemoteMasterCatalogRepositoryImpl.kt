@@ -27,7 +27,7 @@ class RemoteMasterCatalogRepositoryImpl @Inject constructor(
             val syncState = cloudSyncDao.getSyncStateDirect()
             val localLatest = syncState?.lastCatalogSyncAt ?: (masterCatalogDao.getLatestMasterUpdateTimestamp() ?: 0L)
 
-            val snapshot = firestore.collection("master_catalog_books")
+            val snapshot = firestore.collection("masterCatalog")
                 .whereGreaterThan("lastUpdated", localLatest)
                 .limit(1)
                 .get()
@@ -44,7 +44,7 @@ class RemoteMasterCatalogRepositoryImpl @Inject constructor(
             val syncState = cloudSyncDao.getSyncStateDirect()
             val localLatest = syncState?.lastCatalogSyncAt ?: 0L
 
-            val snapshot = firestore.collection("master_catalog_books")
+            val snapshot = firestore.collection("masterCatalog")
                 .whereGreaterThan("lastUpdated", localLatest)
                 .get()
                 .await()

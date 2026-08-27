@@ -3,7 +3,6 @@ package com.boikhata.data.repository
 import com.boikhata.domain.model.SubscriptionPaymentRecord
 import com.boikhata.domain.repository.SubscriptionRepository
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +22,8 @@ class SubscriptionRepositoryImpl @Inject constructor() : SubscriptionRepository 
         tenantId: String,
         amount: Double,
         referencePhone: String,
-        notes: String
+        trxId: String?,
+        note: String?
     ): Result<SubscriptionPaymentRecord> = withContext(Dispatchers.IO) {
         if (tenantId.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("Tenant ID cannot be empty"))
@@ -38,9 +38,11 @@ class SubscriptionRepositoryImpl @Inject constructor() : SubscriptionRepository 
                 "method" to "BKASH_MANUAL",
                 "status" to "PENDING",
                 "referencePhone" to referencePhone,
-                "notes" to notes,
                 "createdAt" to createdAt
             )
+            // trxId and note are OPTIONAL; no required-validation.
+            if (!trxId.isNullOrBlank()) paymentData["trxId"] = trxId
+            if (!note.isNullOrBlank()) paymentData["note"] = note
 
             firestore.collection("subscription_payments").document(paymentId).set(paymentData).await()
 
@@ -52,6 +54,8 @@ class SubscriptionRepositoryImpl @Inject constructor() : SubscriptionRepository 
                     method = "BKASH_MANUAL",
                     status = "PENDING",
                     referencePhone = referencePhone,
+                    trxId = trxId?.takeIf { it.isNotBlank() },
+                    note = note?.takeIf { it.isNotBlank() },
                     createdAt = createdAt
                 )
             )
@@ -67,9 +71,9 @@ class SubscriptionRepositoryImpl @Inject constructor() : SubscriptionRepository 
             return@callbackFlow
         }
 
+        // No orderBy here (a composite index would be required); sort client-side instead.
         val listener = firestore.collection("subscription_payments")
             .whereEqualTo("tenantId", tenantId)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     trySend(emptyList())
@@ -90,9 +94,11 @@ class SubscriptionRepositoryImpl @Inject constructor() : SubscriptionRepository 
                             method = method,
                             status = status,
                             referencePhone = refPhone,
+                            trxId = doc.getString("trxId"),
+                            note = doc.getString("note"),
                             createdAt = createdAt
                         )
-                    }
+                    }.sortedByDescending { it.createdAt }
                     trySend(list)
                 }
             }

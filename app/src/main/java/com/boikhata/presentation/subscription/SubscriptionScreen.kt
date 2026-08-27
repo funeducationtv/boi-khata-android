@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.boikhata.domain.model.LicenseState
+import com.boikhata.domain.model.Role
 import com.boikhata.util.BengaliUtils.toBn
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -32,6 +33,8 @@ fun SubscriptionScreen(
     val payments by viewModel.payments.collectAsState()
     val message by viewModel.message.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
+    val currentUser by viewModel.sessionManager.currentUser.collectAsState()
+    val isOwner = currentUser?.role == Role.OWNER
 
     var showPaymentDialog by remember { mutableStateOf(false) }
 
@@ -58,6 +61,16 @@ fun SubscriptionScreen(
         },
         containerColor = Color(0xFFFDFBFF)
     ) { innerPadding ->
+        if (!isOwner) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("সাবস্ক্রিপশন কেবল দোকান মালিকের জন্য উন্মুক্ত।", color = Color.Gray)
+            }
+            return@Scaffold
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -192,7 +205,8 @@ fun SubscriptionScreen(
     // Submit Payment Dialog
     if (showPaymentDialog) {
         var senderPhone by remember { mutableStateOf("") }
-        var notes by remember { mutableStateOf("") }
+        var trxId by remember { mutableStateOf("") }
+        var note by remember { mutableStateOf("") }
 
         AlertDialog(
             onDismissRequest = { showPaymentDialog = false },
@@ -208,9 +222,16 @@ fun SubscriptionScreen(
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = notes,
-                        onValueChange = { notes = it },
-                        label = { Text("TrxID বা নোট (ঐচ্ছিক)") },
+                        value = trxId,
+                        onValueChange = { trxId = it },
+                        label = { Text("TrxID (ঐচ্ছিক)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { note = it },
+                        label = { Text("নোট (ঐচ্ছিক)") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -219,7 +240,7 @@ fun SubscriptionScreen(
                 Button(
                     onClick = {
                         if (senderPhone.isNotBlank()) {
-                            viewModel.recordManualPayment(senderPhone, notes)
+                            viewModel.recordManualPayment(senderPhone, trxId, note)
                             showPaymentDialog = false
                         }
                     },
