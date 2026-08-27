@@ -5,10 +5,35 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.boikhata.domain.model.LocalAuditLog
-import com.boikhata.domain.model.Tenant
-import com.boikhata.domain.model.User
+import com.boikhata.domain.model.*
 import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface ReturnNoteDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReturnNote(note: ReturnNote)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReturnNoteLines(lines: List<ReturnNoteLine>)
+
+    @Query("SELECT * FROM return_notes WHERE tenantId = :tenantId ORDER BY returnDate DESC")
+    fun getAllReturnNotes(tenantId: String): Flow<List<ReturnNoteWithLines>>
+
+    @Query("SELECT * FROM return_notes WHERE tenantId = :tenantId")
+    suspend fun getAllReturnNotesDirect(tenantId: String): List<ReturnNote>
+
+    @Query("SELECT * FROM return_notes WHERE id = :id AND tenantId = :tenantId")
+    suspend fun getReturnNoteById(tenantId: String, id: String): ReturnNote?
+
+    @Query("SELECT * FROM return_note_lines WHERE returnNoteId = :returnNoteId")
+    suspend fun getLinesForReturnNote(returnNoteId: String): List<ReturnNoteLine>
+
+    @Query("UPDATE return_notes SET status = :status, updatedAt = :timestamp WHERE id = :noteId")
+    suspend fun updateReturnNoteStatus(noteId: String, status: ReturnStatus, timestamp: Long)
+
+    @Query("SELECT * FROM return_notes WHERE tenantId = :tenantId AND originalBillId = :billId")
+    suspend fun getReturnsForBill(tenantId: String, billId: String): List<ReturnNote>
+}
 
 @Dao
 interface TenantDao {

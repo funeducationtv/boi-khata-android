@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.boikhata.domain.model.BundleWithItems
-import com.boikhata.presentation.theme.BoikhataTheme
+import com.boikhata.presentation.theme.BoiKhataTheme as BoikhataTheme
 
 @Composable
 fun BundlesScreen(
