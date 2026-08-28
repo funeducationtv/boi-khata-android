@@ -209,13 +209,23 @@ class RestoreRepositoryImpl @Inject constructor(
 
     private fun khataEntryFromDoc(d: DocumentSnapshot): KhataEntry? {
         val customerId = d.getString("customerId") ?: return null
+        // Backup flips negative ADJUSTMENT amounts to magnitude + "Negative Adj: " prefix
+        // (cloud rules require amount > 0 on this append-only collection). Restore must
+        // reverse the flip so the signed amount and original description survive intact.
+        var amount = d.getDouble("amount") ?: 0.0
+        var description = d.getString("description") ?: ""
+        val type = enumOrDefault(d.getString("type"), KhataEntryType.CREDIT)
+        if (type == KhataEntryType.ADJUSTMENT && description.startsWith("Negative Adj: ")) {
+            description = description.removePrefix("Negative Adj: ")
+            amount = -amount
+        }
         return KhataEntry(
             id = d.id,
             tenantId = d.getString("tenantId") ?: "",
             customerId = customerId,
-            amount = d.getDouble("amount") ?: 0.0,
-            type = enumOrDefault(d.getString("type"), KhataEntryType.CREDIT),
-            description = d.getString("description") ?: "",
+            amount = amount,
+            type = type,
+            description = description,
             referenceBillId = d.getString("referenceBillId")?.takeIf { it.isNotEmpty() },
             collectedByUserId = d.getString("collectedByUserId") ?: "",
             date = d.getLong("date") ?: 0L,
@@ -251,13 +261,21 @@ class RestoreRepositoryImpl @Inject constructor(
 
     private fun cashbookFromDoc(d: DocumentSnapshot): CashbookEntry? {
         val account = d.getString("account") ?: return null
+        // Same negative-ADJUSTMENT reversal as khata entries (see khataEntryFromDoc).
+        var amount = d.getDouble("amount") ?: 0.0
+        var description = d.getString("description") ?: ""
+        val type = enumOrDefault(d.getString("type"), CashbookEntryType.INCOME)
+        if (type == CashbookEntryType.ADJUSTMENT && description.startsWith("Negative Adj: ")) {
+            description = description.removePrefix("Negative Adj: ")
+            amount = -amount
+        }
         return CashbookEntry(
             id = d.id,
             tenantId = d.getString("tenantId") ?: "",
             account = enumOrDefault(account, CashbookAccount.CASH),
-            type = enumOrDefault(d.getString("type"), CashbookEntryType.INCOME),
-            amount = d.getDouble("amount") ?: 0.0,
-            description = d.getString("description") ?: "",
+            type = type,
+            amount = amount,
+            description = description,
             referenceId = d.getString("referenceId")?.takeIf { it.isNotEmpty() },
             date = d.getLong("date") ?: 0L,
             userId = d.getString("userId") ?: "",
