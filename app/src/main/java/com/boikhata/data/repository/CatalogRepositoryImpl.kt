@@ -6,32 +6,40 @@ import com.boikhata.domain.model.BookWithStock
 import com.boikhata.domain.model.StockChangeReason
 import com.boikhata.domain.model.StockLedgerEntry
 import com.boikhata.domain.repository.CatalogRepository
+import com.boikhata.security.LicenseWriteGuard
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import java.util.UUID
 import javax.inject.Inject
 
 class CatalogRepositoryImpl @Inject constructor(
-    private val catalogDao: CatalogDao
+    private val catalogDao: CatalogDao,
+    private val tenantIdProvider: TenantIdProvider,
+    private val writeGuard: LicenseWriteGuard
 ) : CatalogRepository {
-    private val tenantId = "t_1" // Hardcoded for single-tenant offline mode in Phase 3
 
-    override fun getBooksWithStock(): Flow<List<BookWithStock>> = catalogDao.getBooksWithStock(tenantId)
+    override fun getBooksWithStock(): Flow<List<BookWithStock>> =
+        tenantIdProvider.tenantIdFlow().flatMapLatest { catalogDao.getBooksWithStock(it) }
 
     override suspend fun addBook(book: Book, initialStock: Int, userId: String): Result<Unit> {
-        try {
-            catalogDao.insertBook(book.copy(tenantId = tenantId, initialStock = initialStock))
+        return try {
+            writeGuard.assertWritable()
+            val tid = tenantIdProvider.current()
+            catalogDao.insertBook(book.copy(tenantId = tid, initialStock = initialStock))
             // No initial ledger entry needed as it's tracked in initialStock per blueprint to avoid double-counting
-            return Result.success(Unit)
+            Result.success(Unit)
         } catch (e: Exception) {
-            return Result.failure(e)
+            Result.failure(e)
         }
     }
 
     override suspend fun adjustStock(bookId: String, changeQty: Int, reason: StockChangeReason, userId: String): Result<Unit> {
-        try {
+        return try {
+            writeGuard.assertWritable()
+            val tid = tenantIdProvider.current()
             val entry = StockLedgerEntry(
                 id = UUID.randomUUID().toString(),
-                tenantId = tenantId,
+                tenantId = tid,
                 bookId = bookId,
                 changeQuantity = changeQty,
                 reason = reason,
@@ -41,9 +49,9 @@ class CatalogRepositoryImpl @Inject constructor(
                 idempotencyKey = UUID.randomUUID().toString()
             )
             catalogDao.insertStockLedgerEntry(entry)
-            return Result.success(Unit)
+            Result.success(Unit)
         } catch (e: Exception) {
-            return Result.failure(e)
+            Result.failure(e)
         }
     }
 }

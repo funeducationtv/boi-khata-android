@@ -33,4 +33,9 @@
     
     <string name="days_format">(%1$d days)</string>
     <string name="currency_symbol">৳</string>
+
+    <string name="subscription_owner_only">Subscription is available to the shop owner only.</string>
+    <string name="khata_no_permission">You do not have permission to view khata.</string>
+    <string name="subscription_not_activated">Your cloud account is not activated yet — contact the vendor to activate it first.</string>
+    <string name="license_expired_pay_again">Subscription expired — pay again to reactivate</string>
 </resources>

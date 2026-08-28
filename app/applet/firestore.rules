@@ -1,199 +1,182 @@
+// =============================================================================
+// REFERENCE COPY — MIRRORED FROM THE LIVE FIREBASE CONSOLE.
+// The Firebase console is the source of truth. This copy is kept in sync for
+// the applet runtime and developers. If they ever diverge, re-publish this
+// file to the console to restore sync.
+// =============================================================================
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =========================================================================
-    // HELPER FUNCTIONS & AUTHENTICATION VALIDATION
-    // =========================================================================
-
-    // Checks if the user is authenticated with Firebase Auth
-    function isAuthenticated() {
-      return request.auth != null && request.auth.uid != null;
-    }
-
-    // Tenant ID extracted from JWT Custom Claims
-    function getTenantId() {
-      return request.auth.token.tenantId;
-    }
-
-    // Role extracted from JWT Custom Claims: 'OWNER', 'MANAGER', 'SALES', 'ACCOUNTANT'
-    function getRole() {
-      return request.auth.token.role;
-    }
-
-    // Checks if the user belongs to the specified tenant ID
-    function isTenantUser(tenantId) {
-      return isAuthenticated() && getTenantId() == tenantId;
-    }
-
-    // Validates that an existing resource belongs to the user's tenant
-    function isSameTenantResource() {
-      return isAuthenticated() && resource.data.tenantId == getTenantId();
-    }
-
-    // Validates that an incoming (create/update) resource belongs to the user's tenant
-    function isSameTenantIncoming() {
-      return isAuthenticated() && request.resource.data.tenantId == getTenantId();
-    }
-
-    // Role verification helpers
-    function isOwner() {
-      return isAuthenticated() && getRole() == 'OWNER';
-    }
-
-    function isManager() {
-      return isAuthenticated() && getRole() == 'MANAGER';
-    }
-
-    function isSales() {
-      return isAuthenticated() && getRole() == 'SALES';
-    }
-
-    function isAccountant() {
-      return isAuthenticated() && getRole() == 'ACCOUNTANT';
-    }
-
-    // =========================================================================
-    // 1. TENANTS & CONFIGURATION
-    // =========================================================================
-
+    // ================== 1. TENANTS ==================
     match /tenants/{tenantId} {
-      // Any authenticated tenant user can read their shop profile
       allow read: if isTenantUser(tenantId);
-      // Only the OWNER can modify shop settings, BIN number, or profile details
       allow write: if isTenantUser(tenantId) && isOwner();
     }
 
-    // =========================================================================
-    // 2. USER PROFILES & ACCESS CONTROL
-    // =========================================================================
-
+    // ================== 2. USERS ==================
     match /users/{userId} {
-      // Owners & Managers can view all staff; users can read their own profile
       allow read: if isSameTenantResource() && (isOwner() || isManager() || request.auth.uid == userId);
-      // Only the OWNER can create, modify, or disable staff accounts
       allow write: if isSameTenantIncoming() && isOwner();
     }
 
-    // =========================================================================
-    // 3. BOOK CATALOG & STOCK LEDGER
-    // =========================================================================
-
+    // ================== 3. CATALOG & STOCK ==================
     match /books/{bookId} {
-      // All authenticated tenant staff need catalog read access for sales, stock & reporting
       allow read: if isSameTenantResource();
-      // Only OWNER and MANAGER can add/edit catalog items, prices, and thresholds
       allow write: if isSameTenantIncoming() && (isOwner() || isManager());
     }
 
     match /stock_ledger/{entryId} {
-      // Only OWNER and MANAGER can review the complete stock ledger
-      allow read: if isSameTenantResource() && (isOwner() || isManager());
-      // SALES, MANAGER, and OWNER can create immutable ledger transactions (sales/returns/purchases)
+      allow read: if isSameTenantResource() && (isOwner() || isManager() || isSales());
       allow create: if isSameTenantIncoming() && (isOwner() || isManager() || isSales());
-      // Append-only ledger: Updates and deletions are forbidden from client SDKs
-      allow update, delete: if false;
+      allow update, delete: if false; // append-only ledger
     }
 
-    // =========================================================================
-    // 4. BILLING & INVOICING (POS)
-    // =========================================================================
-
+    // ================== 4. BILLING ==================
     match /bills/{billId} {
-      // OWNER and MANAGER can read all bills; SALES can only read their own shift bills
       allow read: if isSameTenantResource() && (
-        isOwner() || isManager() || (isSales() && resource.data.userId == request.auth.uid)
+        isOwner() || isManager() || isAccountant() ||
+        (isSales() && resource.data.userId == request.auth.uid)
       );
-      // OWNER, MANAGER, and SALES can create bills
       allow create: if isSameTenantIncoming() && (isOwner() || isManager() || isSales());
-      // Only OWNER can update/void a bill (ACCOUNTANT & SALES are forbidden from modifying bills)
-      allow update, delete: if isSameTenantResource() && isOwner();
+      allow update, delete: if isSameTenantResource() && isOwner(); // void = OWNER only
     }
 
     match /bill_lines/{lineId} {
-      // OWNER, MANAGER, and SALES can read bill lines for their tenant
-      allow read: if isSameTenantResource() && (isOwner() || isManager() || isSales());
-      // Lines created alongside bills by OWNER, MANAGER, or SALES
+      allow read: if isSameTenantResource() && (isOwner() || isManager() || isAccountant() || isSales());
       allow create: if isSameTenantIncoming() && (isOwner() || isManager() || isSales());
-      // Only OWNER can modify or delete lines
       allow update, delete: if isSameTenantResource() && isOwner();
     }
 
-    // =========================================================================
-    // 5. KHATA (CUSTOMER CREDIT / BOKEYA)
-    // =========================================================================
-
+    // ================== 5. KHATA (CUSTOMER CREDIT) ==================
     match /khata_customers/{customerId} {
-      // OWNER and MANAGER can read and manage khata customers; SALES cannot read
-      allow read: if isSameTenantResource() && (isOwner() || isManager());
-      allow write: if isSameTenantIncoming() && (isOwner() || isManager());
-    }
-
-    match /khata_entries/{entryId} {
-      // OWNER and MANAGER can view dues and credit histories; SALES has NO access
-      allow read: if isSameTenantResource() && (isOwner() || isManager());
-      // Append-only credit/payment entries can be created by OWNER or MANAGER
-      allow create: if isSameTenantIncoming() && (isOwner() || isManager());
-      // Financial ledger integrity: No client updates or deletes
+      allow read: if isSameTenantResource() && (isOwner() || isManager() || isAccountant());
+      allow create: if isSameTenantIncoming() && isOwner(); // customer create = OWNER-ONLY (locked design)
       allow update, delete: if false;
     }
 
-    // =========================================================================
-    // 6. ACCOUNTING, EXPENSES & CASHBOOK
-    // =========================================================================
+    match /khata_entries/{entryId} {
+      allow read: if isSameTenantResource() && (isOwner() || isManager() || isAccountant());
+      // Append-only. Aligned with the app's data-layer gates:
+      // OWNER any type (backup + credit-bill flow); MANAGER & ACCOUNTANT
+      // PAYMENT-only; SALES CREDIT-only when tied to a bill. amount > 0 is
+      // required — the backup uploads negatives as magnitude with a
+      // "Negative Adj: " description prefix.
+      allow create: if isSameTenantIncoming() && isValidAmount() && (
+        isOwner() ||
+        ((isManager() || isAccountant()) && request.resource.data.type == 'PAYMENT') ||
+        (isSales() && request.resource.data.type == 'CREDIT' && request.resource.data.referenceBillId != null)
+      );
+      allow update, delete: if false; // ledger integrity
+    }
 
+    // ================== 6. ACCOUNTING ==================
     match /expenses/{expenseId} {
-      // OWNER and ACCOUNTANT have full expense visibility; SALES & MANAGER have NO access
       allow read: if isSameTenantResource() && (isOwner() || isAccountant());
-      // Only OWNER and ACCOUNTANT can record or update expenses (MANAGER & SALES write FAILS)
       allow write: if isSameTenantIncoming() && (isOwner() || isAccountant());
     }
 
     match /cashbook_entries/{entryId} {
-      // OWNER and ACCOUNTANT can view cash/bKash/bank ledgers
       allow read: if isSameTenantResource() && (isOwner() || isAccountant());
-      // Append-only cashbook entry creation by OWNER and ACCOUNTANT
-      allow create: if isSameTenantIncoming() && (isOwner() || isAccountant());
-      // Ledger integrity: No client updates or deletes
-      allow update, delete: if false;
+      allow create: if isSameTenantIncoming() && (isOwner() || isAccountant()) && isValidAmount();
+      allow update, delete: if false; // append-only ledger
     }
 
-    // =========================================================================
-    // 7. SUBSCRIPTION, LICENSES & WALLET TRANSACTIONS
-    // =========================================================================
+    match /expense_categories/{categoryId} {
+      allow read: if isSameTenantResource() && (isOwner() || isAccountant());
+      allow create: if isSameTenantIncoming() && (isOwner() || isAccountant());
+      allow update, delete: if isSameTenantResource() && (isOwner() || isAccountant());
+    }
 
-    match /license_records/{licenseId} {
-      // Only OWNER can read their store's license status; no client writes (server-managed)
+    match /owner_drawings/{drawingId} {
       allow read: if isSameTenantResource() && isOwner();
-      allow write: if false;
+      allow create: if isSameTenantIncoming() && isOwner();
+      allow update, delete: if false; // immutable from client
+    }
+
+    // ================== 7. MASTER CATALOG (shared reference data, no tenantId) ==================
+    match /masterCatalog/{bookId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // vendor Admin SDK only (bypasses rules)
+    }
+
+    // ================== 8. SUBSCRIPTION / LICENSE / WALLET ==================
+    match /license_records/{licenseId} {
+      allow read: if isSameTenantResource() && isOwner();
+      allow write: if false; // server-managed (vendor activate.js / renew.js)
     }
 
     match /subscription_payments/{paymentId} {
-      // OWNER can view their payment history and initiate new subscription payments
       allow read: if isSameTenantResource() && isOwner();
-      allow create: if isSameTenantIncoming() && isOwner();
-      allow update, delete: if false;
+      allow create: if isSameTenantIncoming() && isOwner() && request.resource.data.status == 'PENDING';
+      allow update, delete: if false; // verification is vendor-side
     }
 
     match /wallet_transactions/{transactionId} {
-      // OWNER can view pre-paid wallet balance and transaction records; writes are server-only
       allow read: if isSameTenantResource() && isOwner();
-      allow write: if false;
+      allow write: if false; // server-only
     }
 
     match /activation_redemptions/{redemptionId} {
-      // Secure scratch-card / activation code redemptions are strictly server-side (Cloud Functions)
+      allow read, write: if false; // server-side only (Cloud Functions)
+    }
+
+    // ================== 9. AUDIT LOGS ==================
+    match /local_audit_logs/{logId} {
+      allow read: if isSameTenantResource() && isOwner();
+      allow write: if false; // server writes only
+    }
+
+    // ================== DEFAULT DENY ==================
+    match /{document=**} {
       allow read, write: if false;
     }
+  }
 
-    // =========================================================================
-    // 8. AUDIT LOGS
-    // =========================================================================
+  // ================== HELPER FUNCTIONS ==================
+  function isAuthenticated() {
+    return request.auth != null && request.auth.uid != null;
+  }
 
-    match /local_audit_logs/{logId} {
-      // Immutable audit trail: Only OWNER can inspect logs; client cannot tamper/write directly
-      allow read: if isSameTenantResource() && isOwner();
-      allow write: if false;
-    }
+  function getTenantId() {
+    return request.auth.token.tenantId;
+  }
+
+  function getRole() {
+    return request.auth.token.role;
+  }
+
+  function isTenantUser(tenantId) {
+    return isAuthenticated() && getTenantId() == tenantId;
+  }
+
+  function isSameTenantResource() {
+    return isAuthenticated() && resource.data.tenantId == getTenantId();
+  }
+
+  function isSameTenantIncoming() {
+    return isAuthenticated() && request.resource.data.tenantId == getTenantId();
+  }
+
+  function isOwner() {
+    return isAuthenticated() && getRole() == 'OWNER';
+  }
+
+  function isManager() {
+    return isAuthenticated() && getRole() == 'MANAGER';
+  }
+
+  function isSales() {
+    return isAuthenticated() && getRole() == 'SALES';
+  }
+
+  function isAccountant() {
+    return isAuthenticated() && getRole() == 'ACCOUNTANT';
+  }
+
+  function isValidAmount() {
+    return request.resource.data.amount is number && request.resource.data.amount > 0;
   }
 }

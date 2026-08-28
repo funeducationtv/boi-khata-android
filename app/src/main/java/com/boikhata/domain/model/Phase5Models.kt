@@ -14,7 +14,10 @@ data class CloudSyncState(
     val lastRestoreAt: Long? = null,
     val lastCatalogSyncAt: Long? = null,
     val licenseExpiresAt: Long? = null,
-    val licenseState: LicenseState = LicenseState.ACTIVE,
+    // Default GRACE (never ACTIVE): before the first real cloud sync, a fabricated ACTIVE
+    // license must never exist — matches the local-onboarding GRACE convention and the
+    // first-login default in FirebaseAuthRepositoryImpl.
+    val licenseState: LicenseState = LicenseState.GRACE,
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -50,5 +53,7 @@ data class SubscriptionPaymentRecord(
     val method: String,
     val status: String,
     val referencePhone: String,
+    val trxId: String? = null,
+    val note: String? = null,
     val createdAt: Long
 )

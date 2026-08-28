@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.R
+import com.boikhata.R
 import com.boikhata.domain.model.LicenseState
 import com.boikhata.domain.repository.CollectItem
 import com.boikhata.domain.repository.DashboardData

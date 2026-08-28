@@ -27,7 +27,8 @@ interface SubscriptionRepository {
         tenantId: String,
         amount: Double = 250.0,
         referencePhone: String,
-        notes: String = ""
+        trxId: String? = null,
+        note: String? = null
     ): Result<SubscriptionPaymentRecord>
     fun getPaymentHistory(tenantId: String): Flow<List<SubscriptionPaymentRecord>>
 }
