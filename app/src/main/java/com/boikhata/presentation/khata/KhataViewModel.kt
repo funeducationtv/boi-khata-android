@@ -26,6 +26,9 @@ class KhataViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    private val _isSubmitting = MutableStateFlow(false)
+    val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
+
     init {
         viewModelScope.launch {
             khataRepo.getCustomersWithBalance().collect { _customers.value = it }
@@ -37,9 +40,12 @@ class KhataViewModel @Inject constructor(
     }
 
     fun createCustomer(name: String, phone: String, address: String, creditLimit: Double) {
+        if (_isSubmitting.value) return
         val currentUserId = sessionManager.currentUser.value?.id ?: "user_1"
         viewModelScope.launch {
+            _isSubmitting.value = true
             val result = khataRepo.createCustomer(name, phone, address, creditLimit, currentUserId)
+            _isSubmitting.value = false
             if (result.isFailure) {
                 _message.value = result.exceptionOrNull()?.message ?: "কাস্টমার যোগ করতে ত্রুটি"
             } else {
@@ -49,9 +55,12 @@ class KhataViewModel @Inject constructor(
     }
 
     fun recordPayment(customerId: String, amount: Double, method: PaymentMethod) {
+        if (_isSubmitting.value) return
         val currentUserId = sessionManager.currentUser.value?.id ?: "user_1"
         viewModelScope.launch {
+            _isSubmitting.value = true
             val result = khataRepo.recordPayment(customerId, amount, method, currentUserId)
+            _isSubmitting.value = false
             if (result.isSuccess) {
                 _message.value = "৳${amount} টাকা আদায় সফলভাবে রেকর্ড করা হয়েছে"
             } else {
@@ -61,9 +70,12 @@ class KhataViewModel @Inject constructor(
     }
 
     fun addManualCredit(customerId: String, amount: Double, description: String) {
+        if (_isSubmitting.value) return
         val currentUserId = sessionManager.currentUser.value?.id ?: "user_1"
         viewModelScope.launch {
+            _isSubmitting.value = true
             val result = khataRepo.addManualCredit(customerId, amount, description, currentUserId)
+            _isSubmitting.value = false
             if (result.isSuccess) {
                 _message.value = "বাকি সফলভাবে যুক্ত করা হয়েছে"
             } else {

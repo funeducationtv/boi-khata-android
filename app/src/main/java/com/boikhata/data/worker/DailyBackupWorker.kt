@@ -29,6 +29,12 @@ class DailyBackupWorker @AssistedInject constructor(
             return Result.success()
         }
 
+        // Backup is an OWNER-only operation (live rules deny non-owner writes to
+        // cashbook/expenses/bills). Skip silently for any other role.
+        if (syncState.cloudRole != null && syncState.cloudRole != "OWNER") {
+            return Result.success()
+        }
+
         return try {
             val result = backupRepository.performBackup(tenantId).firstOrNull { it is BackupProgress.Success || it is BackupProgress.Error }
             if (result is BackupProgress.Success) {

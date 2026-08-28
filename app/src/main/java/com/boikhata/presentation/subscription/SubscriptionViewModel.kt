@@ -18,7 +18,7 @@ import javax.inject.Inject
 class SubscriptionViewModel @Inject constructor(
     private val licenseRepo: CloudLicenseRepository,
     private val subscriptionRepo: SubscriptionRepository,
-    private val sessionManager: SessionManager
+    val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _licenseInfo = MutableStateFlow<LicenseInfo?>(null)
@@ -34,15 +34,17 @@ class SubscriptionViewModel @Inject constructor(
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     init {
-        val tenantId = sessionManager.cloudAuthState.value.tenantId ?: "t_1"
-        viewModelScope.launch {
-            licenseRepo.syncLicense(tenantId)
+        val tenantId = sessionManager.cloudAuthState.value.tenantId
+        if (!tenantId.isNullOrBlank()) {
+            viewModelScope.launch { licenseRepo.syncLicense(tenantId) }
         }
         viewModelScope.launch {
             licenseRepo.observeLicenseState().collect { _licenseInfo.value = it }
         }
-        viewModelScope.launch {
-            subscriptionRepo.getPaymentHistory(tenantId).collect { _payments.value = it }
+        if (!tenantId.isNullOrBlank()) {
+            viewModelScope.launch {
+                subscriptionRepo.getPaymentHistory(tenantId).collect { _payments.value = it }
+            }
         }
     }
 
@@ -50,15 +52,22 @@ class SubscriptionViewModel @Inject constructor(
         _message.value = null
     }
 
-    fun recordManualPayment(senderPhone: String, notes: String) {
-        val tenantId = sessionManager.cloudAuthState.value.tenantId ?: "t_1"
+    fun recordManualPayment(senderPhone: String, trxId: String, note: String) {
+        val tenantId = sessionManager.cloudAuthState.value.tenantId
+        if (tenantId.isNullOrBlank()) {
+            // Pending activation / no cloud tenant: do NOT write (rules would deny).
+            _message.value = "ক্লাউড অ্যাকাউন্ট সক্রিয় নয় — ভেন্ডরের সাথে যোগাযোগ করে আগে অ্যাকাউন্ট সক্রিয় করুন।"
+            return
+        }
+
         viewModelScope.launch {
             _isSubmitting.value = true
             val result = subscriptionRepo.createPaymentRecord(
                 tenantId = tenantId,
                 amount = 250.0,
                 referencePhone = senderPhone,
-                notes = notes
+                trxId = trxId,
+                note = note
             )
             _isSubmitting.value = false
             if (result.isSuccess) {

@@ -1,9 +1,9 @@
 package com.boikhata.data.repository
 
 import com.boikhata.data.local.CloudSyncDao
-import com.boikhata.data.local.TenantDao
 import com.boikhata.domain.model.LicenseInfo
 import com.boikhata.domain.model.LicenseState
+import com.boikhata.domain.model.LicenseStateCalculator
 import com.boikhata.domain.repository.CloudLicenseRepository
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +16,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CloudLicenseRepositoryImpl @Inject constructor(
-    private val cloudSyncDao: CloudSyncDao,
-    private val tenantDao: TenantDao
+    private val cloudSyncDao: CloudSyncDao
 ) : CloudLicenseRepository {
 
     private val firestore: FirebaseFirestore get() = FirebaseFirestore.getInstance()
@@ -27,83 +26,85 @@ class CloudLicenseRepositoryImpl @Inject constructor(
             return@withContext Result.failure(IllegalArgumentException("Tenant ID cannot be empty"))
         }
 
+        // Live rules allow license_records read for OWNER only. Non-owners keep the
+        // Room-cached state and never attempt the (denied) network read.
+        val role = cloudSyncDao.getSyncStateDirect()?.cloudRole
+        if (role != null && role != "OWNER") {
+            val cached = cachedLicense(tenantId)
+            return@withContext if (cached != null) Result.success(cached)
+            else Result.failure(IllegalStateException("লাইসেন্স তথ্য শুধুমাত্র মালিকের জন্য উপলব্ধ"))
+        }
+
         try {
-            // Read-only from /license_records/{tenantId}
+            // Read-only from top-level /license_records/{tenantId}
             val snapshot = firestore.collection("license_records").document(tenantId).get().await()
-            val expiresAt = snapshot.getLong("expiresAt") ?: (System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000))
-            val updatedAt = snapshot.getLong("updatedAt") ?: System.currentTimeMillis()
 
-            val now = System.currentTimeMillis()
-            val diffMillis = expiresAt - now
-            val daysRemaining = (diffMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(0)
-
-            val derivedState = when {
-                now <= expiresAt -> LicenseState.ACTIVE
-                now <= expiresAt + (14L * 24 * 60 * 60 * 1000) -> LicenseState.GRACE
-                now <= expiresAt + (30L * 24 * 60 * 60 * 1000) -> LicenseState.SOFT_LOCKED
-                else -> LicenseState.SUSPENDED
+            // MANDATORY existence check: a missing document throws NO exception, so the
+            // catch block alone would wrongly fabricate a license. Missing -> local fallback.
+            if (!snapshot.exists()) {
+                val cached = cachedLicense(tenantId)
+                return@withContext if (cached != null) Result.success(cached)
+                else Result.failure(IllegalStateException("লাইসেন্স রেকর্ড পাওয়া যায়নি"))
             }
 
-            // Save in local Room CloudSyncDao
+            // expiresAt is written by vendor scripts as a Firestore Timestamp; fall back to
+            // a numeric epoch-millis Long for robustness (never fabricate now + 30d).
+            val expiresAt = snapshot.getTimestamp("expiresAt")?.toDate()?.time
+                ?: snapshot.getLong("expiresAt")
+            val updatedAt = snapshot.getTimestamp("updatedAt")?.toDate()?.time
+                ?: snapshot.getLong("updatedAt")
+                ?: System.currentTimeMillis()
+
+            if (expiresAt == null) {
+                val cached = cachedLicense(tenantId)
+                return@withContext if (cached != null) Result.success(cached)
+                else Result.failure(IllegalStateException("লাইসেন্সের মেয়াদ পাওয়া যায়নি"))
+            }
+
+            val derivedState = LicenseStateCalculator.derive(expiresAt)
             cloudSyncDao.updateLicense(expiresAt, derivedState, updatedAt)
 
-            val licenseInfo = LicenseInfo(
-                tenantId = tenantId,
-                expiresAt = expiresAt,
-                daysRemaining = daysRemaining,
-                state = derivedState,
-                updatedAt = updatedAt
-            )
-            Result.success(licenseInfo)
-        } catch (e: Exception) {
-            // Fallback to locally cached license info
-            val cached = cloudSyncDao.getSyncStateDirect()
-            if (cached?.licenseExpiresAt != null) {
-                val expiresAt = cached.licenseExpiresAt
-                val now = System.currentTimeMillis()
-                val diffMillis = expiresAt - now
-                val daysRemaining = (diffMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(0)
-                val state = when {
-                    now <= expiresAt -> LicenseState.ACTIVE
-                    now <= expiresAt + (14L * 24 * 60 * 60 * 1000) -> LicenseState.GRACE
-                    now <= expiresAt + (30L * 24 * 60 * 60 * 1000) -> LicenseState.SOFT_LOCKED
-                    else -> LicenseState.SUSPENDED
-                }
-                Result.success(
-                    LicenseInfo(
-                        tenantId = tenantId,
-                        expiresAt = expiresAt,
-                        daysRemaining = daysRemaining,
-                        state = state,
-                        updatedAt = cached.updatedAt
-                    )
+            Result.success(
+                LicenseInfo(
+                    tenantId = tenantId,
+                    expiresAt = expiresAt,
+                    daysRemaining = LicenseStateCalculator.daysRemaining(expiresAt),
+                    state = derivedState,
+                    updatedAt = updatedAt
                 )
-            } else {
-                Result.failure(e)
-            }
+            )
+        } catch (e: Exception) {
+            // Offline-first / network failure: keep the last known LOCAL state. Never surface
+            // an "ERROR" UI state, and never fabricate an ACTIVE license.
+            val cached = cachedLicense(tenantId)
+            if (cached != null) Result.success(cached) else Result.failure(e)
         }
     }
 
     override fun observeLicenseState(): Flow<LicenseInfo?> {
         return cloudSyncDao.getCloudSyncState().map { state ->
-            if (state?.licenseExpiresAt == null) return@map null
-            val expiresAt = state.licenseExpiresAt
-            val now = System.currentTimeMillis()
-            val diffMillis = expiresAt - now
-            val daysRemaining = (diffMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(0)
-            val derivedState = when {
-                now <= expiresAt -> LicenseState.ACTIVE
-                now <= expiresAt + (14L * 24 * 60 * 60 * 1000) -> LicenseState.GRACE
-                now <= expiresAt + (30L * 24 * 60 * 60 * 1000) -> LicenseState.SOFT_LOCKED
-                else -> LicenseState.SUSPENDED
-            }
+            val expiresAt = state?.licenseExpiresAt ?: return@map null
             LicenseInfo(
                 tenantId = state.tenantId,
                 expiresAt = expiresAt,
-                daysRemaining = daysRemaining,
-                state = derivedState,
+                daysRemaining = LicenseStateCalculator.daysRemaining(expiresAt),
+                state = LicenseStateCalculator.derive(expiresAt),
                 updatedAt = state.updatedAt
             )
         }
+    }
+
+    /** Rebuild a [LicenseInfo] from the last known local Room state, deriving state fresh. */
+    private suspend fun cachedLicense(tenantId: String): LicenseInfo? {
+        val cached = cloudSyncDao.getSyncStateDirect() ?: return null
+        val expiresAt = cached.licenseExpiresAt ?: return null
+        val state: LicenseState = LicenseStateCalculator.derive(expiresAt)
+        return LicenseInfo(
+            tenantId = tenantId,
+            expiresAt = expiresAt,
+            daysRemaining = LicenseStateCalculator.daysRemaining(expiresAt),
+            state = state,
+            updatedAt = cached.updatedAt
+        )
     }
 }

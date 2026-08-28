@@ -33,4 +33,9 @@
     <string name="coming_next_phase">পরবর্তী ফেজে আসছে</string>
     <string name="days_format">(%1$d দিন)</string>
     <string name="currency_symbol">৳</string>
+
+    <string name="subscription_owner_only">সাবস্ক্রিপশন কেবল দোকান মালিকের জন্য উন্মুক্ত।</string>
+    <string name="khata_no_permission">খাতা দেখার অনুমতি আপনার নেই।</string>
+    <string name="subscription_not_activated">ক্লাউড অ্যাকাউন্ট সক্রিয় নয় — ভেন্ডরের সাথে যোগাযোগ করে আগে অ্যাকাউন্ট সক্রিয় করুন।</string>
+    <string name="license_expired_pay_again">সাবস্ক্রিপশন মেয়াদোত্তীর্ণ — পেমেন্ট করে আবার চালু করুন</string>
 </resources>

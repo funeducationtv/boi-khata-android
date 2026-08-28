@@ -27,12 +27,13 @@ fun KhataScreen(sessionManager: SessionManager, viewModel: KhataViewModel = hilt
     val customers by viewModel.customers.collectAsState()
     val user by sessionManager.currentUser.collectAsState()
     val message by viewModel.message.collectAsState()
+    val isSubmitting by viewModel.isSubmitting.collectAsState()
     val isOwner = user?.role == Role.OWNER
     val isSales = user?.role == Role.SALES
 
     if (isSales) {
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFFFDFBFF)), contentAlignment = Alignment.Center) {
-            Text("খাতা দেখার অনুমতি কেবলমাত্র দোকান মালিকের রয়েছে।", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+            Text("খাতা দেখার অনুমতি আপনার নেই।", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
         }
         return
     }
@@ -86,8 +87,8 @@ fun KhataScreen(sessionManager: SessionManager, viewModel: KhataViewModel = hilt
                     items(customers) { item ->
                         val isOverLimit = item.balance >= item.customer.creditLimit && item.customer.creditLimit > 0
                         val agingColor = when {
-                            item.daysOverdue > 60 -> Color(0xFFBA1A1A) // 🔴 Red
-                            item.daysOverdue > 30 -> Color(0xFFD97706) // 🟡 Yellow/Orange
+                            item.daysOverdue > 30 -> Color(0xFFBA1A1A) // 🔴 Red
+                            item.daysOverdue >= 15 -> Color(0xFFD97706) // 🟡 Yellow/Orange
                             else -> Color(0xFF059669) // 🟢 Green
                         }
 
@@ -231,7 +232,8 @@ fun KhataScreen(sessionManager: SessionManager, viewModel: KhataViewModel = hilt
                             viewModel.createCustomer(name, phone, address, limit.toDoubleOrNull() ?: 5000.0)
                             showAddCustomer = false
                         }
-                    }
+                    },
+                    enabled = !isSubmitting
                 ) { Text("সংরক্ষণ করুন") }
             },
             dismissButton = {
@@ -286,6 +288,7 @@ fun KhataScreen(sessionManager: SessionManager, viewModel: KhataViewModel = hilt
                             selectedCustomerForPayment = null
                         }
                     },
+                    enabled = !isSubmitting,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
                 ) { Text("আদায় নিশ্চিত করুন") }
             },

@@ -50,5 +50,7 @@ data class SubscriptionPaymentRecord(
     val method: String,
     val status: String,
     val referencePhone: String,
+    val trxId: String? = null,
+    val note: String? = null,
     val createdAt: Long
 )
